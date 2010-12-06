@@ -107,5 +107,13 @@ module EC2Boot
                 end
             end
         end
+        
+        def self.update_hostname(ud, md, config)
+          if ud.user_data.is_a?(Hash) && ud.user_data.include?(:facts)
+             if ud.user_data[:facts].include?(:hostname)
+                `hostname #{ud.user_data[:facts][:hostname]}`
+             end
+          end
+        end
     end
 end
