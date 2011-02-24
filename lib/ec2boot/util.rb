@@ -65,14 +65,18 @@ module EC2Boot
         # with data from the facts
         def self.update_motd(ud, md, config)
             templ = File.readlines(config.motd_template)
-
+            if ud.user_data.is_a?(Hash) && ud.user_data.include?(:facts) && ud.user_data[:facts].include?(:hostname)
+              hostname = ud.user_data[:facts][:hostname]
+            else
+              hostname = md.flat_data["hostname"]
+            end
             File.open(config.motd_file, "w") do |motd|
                 templ.each do |line|
                     if md.fetched?
                         line.gsub!(/@@ami_id@@/, md.flat_data["ami_id"])
                         line.gsub!(/@@instance_type@@/, md.flat_data["instance_type"])
                         line.gsub!(/@@placement_availability_zone@@/, md.flat_data["placement_availability_zone"])
-                        line.gsub!(/@@hostname@@/, md.flat_data["hostname"])
+                        line.gsub!(/@@hostname@@/, hostname)
                         line.gsub!(/@@public_hostname@@/, md.flat_data["public_hostname"])
                     end
 
@@ -107,6 +111,14 @@ module EC2Boot
                     facts.puts("ec2_placement_region=" + data["placement_availability_zone"].chop)
                 end
             end
+        end
+        
+        def self.update_hostname(ud, md, config)
+          if ud.user_data.is_a?(Hash) && ud.user_data.include?(:facts)
+             if ud.user_data[:facts].include?(:hostname)
+                `hostname #{ud.user_data[:facts][:hostname]}`
+             end
+          end
         end
     end
 end
