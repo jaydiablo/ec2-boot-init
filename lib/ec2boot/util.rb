@@ -87,13 +87,13 @@ module EC2Boot
 
         # writes out the facts file
         def self.write_facts(ud, md, config)
-            File.open(config.facts_file, "w") do |facts|
+            #File.open(config.facts_file, "w") do |facts|
 
                 if ud.fetched?
                     if ud.user_data.is_a?(Hash)
                         if ud.user_data.include?(:facts)
                             ud.user_data[:facts].each_pair do |k,v|
-                                facts.puts("#{k}=#{v}")
+                                %x[#{config.fact_add} #{self.shellescape(k)} #{self.shellescape(v)}]
                             end
                         end
                     end
@@ -103,16 +103,34 @@ module EC2Boot
                     data = md.flat_data
 
                     data.keys.sort.each do |k|
-                        facts.puts("ec2_#{k}=#{data[k]}")
+                        %x[#{config.fact_add} #{self.shellescape('ec2_' + k)} #{self.shellescape(data[k])}]
                     end
                 end
 
                 if data.include?("placement_availability_zone")
-                    facts.puts("ec2_placement_region=" + data["placement_availability_zone"].chop)
+                    %x[#{config.fact_add} ec2_placement_region #{self.shellescape(data["placement_availability_zone"].chop)}]
                 end
-            end
+            #end
         end
         
+        def self.shellescape(str)
+            # An empty argument will be skipped, so return empty quotes.
+            return "''" if str.empty?
+
+            str = str.dup
+
+            # Process as a single byte sequence because not all shell
+            # implementations are multibyte aware.
+            str.gsub!(/([^A-Za-z0-9_\-.,:\/@\n])/n, "\\\\\\1")
+
+            # A LF cannot be escaped with a backslash because a backslash + LF
+            # combo is regarded as line continuation and simply ignored.
+            str.gsub!(/\n/, "'\n'")
+
+            return str
+        end
+
+
         def self.update_hostname(ud, md, config)
           if ud.user_data.is_a?(Hash) && ud.user_data.include?(:facts)
              if ud.user_data[:facts].include?(:hostname)
