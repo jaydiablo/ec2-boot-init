@@ -1,4 +1,5 @@
 require "yaml"
+require "facter"
 
 module EC2Boot
     class Util
@@ -89,7 +90,7 @@ module EC2Boot
 
         # writes out the facts file
         def self.write_facts(ud, md, config)
-            facts = Hash.new
+            facts = ::Facter.to_hash
 
             if ud.fetched?
                 if ud.user_data.is_a?(Hash)
@@ -117,7 +118,12 @@ module EC2Boot
             #end
 
             if config.facts_yaml
-                existing_facts = YAML::load(File.open(config.facts_yaml))
+                configDir = File.dirname(config.facts_yaml)
+                if !File.exists?(configDir) && !File.directory?(configDir)
+                    Dir.mkdir(configDir)
+                end
+
+                existing_facts = YAML::load(File.open(config.facts_yaml, "a+"))
                 if !existing_facts.is_a?(Hash)
                     existing_facts = Hash.new
                 end
@@ -139,6 +145,8 @@ module EC2Boot
         end
         
         def self.shellescape(str)
+            str = str.to_s
+            
             # An empty argument will be skipped, so return empty quotes.
             return "''" if str.empty?
 
