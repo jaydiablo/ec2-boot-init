@@ -1,3 +1,5 @@
+require "yaml"
+
 module EC2Boot
     class Util
         # Fetches a url, it will retry 5 times if it still
@@ -87,30 +89,53 @@ module EC2Boot
 
         # writes out the facts file
         def self.write_facts(ud, md, config)
-            #File.open(config.facts_file, "w") do |facts|
+            facts = Hash.new
 
-                if ud.fetched?
-                    if ud.user_data.is_a?(Hash)
-                        if ud.user_data.include?(:facts)
-                            ud.user_data[:facts].each_pair do |k,v|
-                                %x[#{config.fact_add} #{self.shellescape(k)} #{self.shellescape(v)}]
-                            end
+            if ud.fetched?
+                if ud.user_data.is_a?(Hash)
+                    if ud.user_data.include?(:facts)
+                        ud.user_data[:facts].each_pair do |k,v|
+                            self.write_fact(k, v, config)
+                            facts[k] = v
                         end
                     end
                 end
+            end
 
-                if md.fetched?
-                    data = md.flat_data
-
-                    data.keys.sort.each do |k|
-                        %x[#{config.fact_add} #{self.shellescape('ec2_' + k)} #{self.shellescape(data[k])}]
-                    end
-                end
-
-                if data.include?("placement_availability_zone")
-                    %x[#{config.fact_add} ec2_placement_region #{self.shellescape(data["placement_availability_zone"].chop)}]
-                end
+            # EC2 metadata (Facter does this automatically now)
+            #if md.fetched?
+            #    data = md.flat_data
+            #
+            #    data.keys.sort.each do |k|
+            #        %x[#{config.fact_add} #{self.shellescape('ec2_' + k)} #{self.shellescape(data[k])}]
+            #    end
             #end
+
+            #if data.include?("placement_availability_zone")
+            #    self.write_fact("ec2_placement_region", data["placement_availability_zone"].chop, config)
+            #    facts["ec2_placement_region"] = data["placement_availability_zone"].chop
+            #end
+
+            if config.facts_yaml
+                existing_facts = YAML::load(File.open(config.facts_yaml))
+                if !existing_facts.is_a?(Hash)
+                    existing_facts = Hash.new
+                end
+
+                # Merge existing with new, overriding with new facts
+                existing_facts.update(facts)
+
+                # Write facts to yaml file
+                File.open(config.facts_yaml, "w") do |f|
+                    f.write(existing_facts.to_yaml)
+                end
+            end
+        end
+
+        def self.write_fact(k, v, config)
+            if config.fact_add
+                %x[#{config.fact_add} #{self.shellescape(k)} #{self.shellescape(v)}]
+            end
         end
         
         def self.shellescape(str)
@@ -129,7 +154,6 @@ module EC2Boot
 
             return str
         end
-
 
         def self.update_hostname(ud, md, config)
           if ud.user_data.is_a?(Hash) && ud.user_data.include?(:facts)
